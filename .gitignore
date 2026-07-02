@@ -1,0 +1,56 @@
+# Python environments and caches
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Build/package artifacts
+build/
+dist/
+*.egg-info/
+
+# Local data and generated experiment artifacts
+phase1/
+prepared/
+outputs/
+submissions/
+
+# External/vendor clones; install or clone these from their upstream source.
+external/
+
+# Local installers and large binary downloads
+tools/
+*.exe
+*.msi
+*.zip
+*.7z
+*.tar
+*.tar.gz
+*.rar
+
+# Model/checkpoint/3D artifacts
+*.pth
+*.pt
+*.ckpt
+*.onnx
+*.ply
+
+# Generated report media; keep report markdown/CSV tracked.
+reports/*.png
+reports/*.jpg
+reports/*.jpeg
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo

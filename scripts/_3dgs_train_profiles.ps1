@@ -225,7 +225,7 @@ function Add-3DgsTrainOptions {
     if ($Settings.Antialiasing) {
         $args += "--antialiasing"
     }
-    if ($Settings.DensifyUntilIter -gt 0) {
+    if ($Settings.DensifyUntilIter -ge 0) {
         $args += @("--densify_until_iter", "$($Settings.DensifyUntilIter)")
     }
     if ($Settings.DensifyGradThreshold -ge 0) {

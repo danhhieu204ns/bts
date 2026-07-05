@@ -20,6 +20,7 @@ param(
     [string[]]$ExtraArgs = @(),
     [string]$Python = "",
     [string]$CudaVisibleDevices = "",
+    [switch]$SkipTrainEval,
     [switch]$Quiet
 )
 
@@ -56,10 +57,16 @@ if ($settings.OptimizerType -eq "sparse_adam" -and -not (Test-3DgsSparseAdamAvai
     Write-Warning "Sparse Adam is not available in diff_gaussian_rasterization. Falling back to optimizer=default."
     $settings.OptimizerType = "default"
 }
+if ($PSBoundParameters.ContainsKey("DensifyUntilIter")) {
+    $settings.DensifyUntilIter = $DensifyUntilIter
+}
+if ($SkipTrainEval) {
+    $settings.TestIterations = @($settings.Iterations + 1)
+}
 
 Write-Host (
-    "TRAIN scene preset={0} iterations={1} resolution={2} optimizer={3} antialiasing={4}" -f `
-    $settings.Preset, $settings.Iterations, $settings.Resolution, $settings.OptimizerType, $settings.Antialiasing
+    "TRAIN scene preset={0} iterations={1} resolution={2} optimizer={3} antialiasing={4} densify_until={5}" -f `
+    $settings.Preset, $settings.Iterations, $settings.Resolution, $settings.OptimizerType, $settings.Antialiasing, $settings.DensifyUntilIter
 )
 
 $argsList = Add-3DgsTrainOptions `

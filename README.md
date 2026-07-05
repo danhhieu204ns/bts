@@ -109,17 +109,27 @@ git -C external/gaussian-splatting submodule update --init --recursive
 - GPU NVIDIA có CUDA.
 - PyTorch CUDA runtime khớp với CUDA Toolkit để build extension.
 - Visual Studio 2022 Build Tools có workload C++.
+- NVIDIA CUDA Toolkit chỉ là một phần; vẫn cần VS Build Tools để có `cl.exe` và `VsDevCmd.bat`.
 - CUDA Toolkit tương ứng, ví dụ `v12.6` nếu Torch là `cu126`.
 
 Build extension trên Windows:
 
 ```powershell
-.\scripts\build_3dgs_extensions_windows.ps1 `
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build_3dgs_extensions_windows.ps1 `
   -Python .\.venv\Scripts\python.exe `
   -CudaPath "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.6" `
-  -TorchCudaArchList "8.9" `
   -ForceReinstall
 ```
+
+Script sẽ tự detect `TORCH_CUDA_ARCH_LIST` từ GPU đầu tiên. Chỉ truyền tay nếu cần override,
+ví dụ RTX 3050 / RTX 30xx dùng `-TorchCudaArchList "8.6"`, RTX 40xx dùng `"8.9"`.
+
+Nếu gặp lỗi `running scripts is disabled`, dùng đúng mẫu lệnh `powershell -ExecutionPolicy Bypass -File`
+ở trên thay vì chạy trực tiếp file `.ps1`.
+
+Nếu script báo Python 3.13/3.14, tạo lại `.venv` bằng Python 3.11 hoặc 3.12 rồi cài lại Torch `cu126`.
+Nếu script báo chỉ thấy Visual Studio Build Tools 2026/18.x, cài Visual Studio 2022 Build Tools với workload
+`Desktop development with C++`. CUDA 12.6 có thể crash `cudafe++` với MSVC quá mới.
 
 `TorchCudaArchList` phụ thuộc GPU:
 

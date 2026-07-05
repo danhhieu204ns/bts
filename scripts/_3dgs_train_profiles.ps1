@@ -254,6 +254,21 @@ function Add-3DgsTrainOptions {
     return @($args)
 }
 
+function Test-3DgsSparseAdamAvailable {
+    param([string]$Python)
+
+    $checkScript = @"
+try:
+    from diff_gaussian_rasterization import SparseGaussianAdam
+except Exception:
+    raise SystemExit(1)
+raise SystemExit(0)
+"@
+
+    $checkScript | & $Python -
+    return ($LASTEXITCODE -eq 0)
+}
+
 function ConvertTo-3DgsQuotedCommand {
     param([string[]]$ArgsList)
 

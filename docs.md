@@ -61,14 +61,27 @@ For the BTS-sharpness profile:
   -Force
 ```
 
+On a local RTX 3050 / 6 GB GPU, keep the BTS profile at half resolution:
+
+```powershell
+.\scripts\train_3dgs_batch.ps1 `
+  -PreparedRoot prepared\3dgs_public `
+  -ModelRoot outputs\3dgs_models_public_local_bts_r2 `
+  -Preset l40s-bts-quality `
+  -Resolution 2 `
+  -Force
+```
+
 If the accelerated rasterizer is not installed, use:
 
 ```powershell
 -OptimizerType default
 ```
 
-but expect slower training. The L40S presets default to `sparse_adam` because that
-is the right speed target for a large GPU with the accelerated 3DGS extensions.
+but expect slower training. The scripts also detect this case and fall back to
+`default` automatically before launching training. The L40S presets default to
+`sparse_adam` because that is the right speed target for a large GPU with the
+accelerated 3DGS extensions.
 
 ## Render and evaluate public
 

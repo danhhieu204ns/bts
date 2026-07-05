@@ -52,6 +52,11 @@ $settings = Resolve-3DgsTrainSettings `
     -OpacityResetInterval $OpacityResetInterval `
     -ExtraArgs $ExtraArgs
 
+if ($settings.OptimizerType -eq "sparse_adam" -and -not (Test-3DgsSparseAdamAvailable -Python $pythonExe)) {
+    Write-Warning "Sparse Adam is not available in diff_gaussian_rasterization. Falling back to optimizer=default."
+    $settings.OptimizerType = "default"
+}
+
 Write-Host (
     "TRAIN scene preset={0} iterations={1} resolution={2} optimizer={3} antialiasing={4}" -f `
     $settings.Preset, $settings.Iterations, $settings.Resolution, $settings.OptimizerType, $settings.Antialiasing

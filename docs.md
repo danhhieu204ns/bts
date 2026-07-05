@@ -72,6 +72,21 @@ On a local RTX 3050 / 6 GB GPU, keep the BTS profile at half resolution:
   -Force
 ```
 
+If you specifically want full resolution on a 6 GB GPU, disable densification
+and skip train-time evaluation. Render/evaluate after training instead:
+
+```powershell
+.\scripts\train_3dgs_batch.ps1 `
+  -PreparedRoot prepared\3dgs_public `
+  -ModelRoot outputs\3dgs_models_public_local_r1 `
+  -Preset l40s-bts-quality `
+  -Resolution 1 `
+  -OptimizerType default `
+  -DensifyUntilIter 0 `
+  -SkipTrainEval `
+  -Force
+```
+
 If the accelerated rasterizer is not installed, use:
 
 ```powershell

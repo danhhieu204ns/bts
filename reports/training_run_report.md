@@ -18,7 +18,7 @@ Script:
 
 ```text
 src/bts_baseline/point_splat_baseline.py
-scripts/run_point_splat_baseline.ps1
+scripts/run_point_splat_baseline.sh
 ```
 
 Method:

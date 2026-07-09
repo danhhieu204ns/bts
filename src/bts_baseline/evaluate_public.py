@@ -24,7 +24,7 @@ def main() -> None:
         import numpy as np
         from PIL import Image
     except ImportError as exc:
-        raise SystemExit("Install requirements first: .\\.venv\\Scripts\\python.exe -m pip install -r requirements.txt") from exc
+        raise SystemExit("Install requirements first: .venv/bin/python -m pip install -r requirements.txt") from exc
 
     try:
         from skimage.metrics import structural_similarity
@@ -117,7 +117,7 @@ def load_lpips(mode: str, net: str, device_arg: str):
         if mode == "on":
             raise SystemExit(
                 "LPIPS requested but not installed. Install optional deps with: "
-                ".\\.venv\\Scripts\\python.exe -m pip install -r requirements-lpips.txt"
+                ".venv/bin/python -m pip install -r requirements-lpips.txt"
             ) from exc
         return None
 

@@ -49,8 +49,8 @@ Lưu ý: `train/sparse/0/images.bin` của contest có thể chứa cả train v
 Cài gói hệ thống:
 
 ```bash
-sudo apt update
-sudo apt install -y \
+apt update
+apt install -y \
   git \
   curl \
   build-essential \
@@ -59,12 +59,6 @@ sudo apt install -y \
   python3.11 \
   python3.11-venv \
   python3-pip
-```
-
-Cài `pwsh` nếu máy chưa có, vì các helper script trong repo hiện là `.ps1`:
-
-```bash
-sudo apt install -y powershell
 ```
 
 Tạo virtual environment:
@@ -127,10 +121,7 @@ Trên Ubuntu, cần CUDA Toolkit tương thích với `torch.version.cuda`. Sau 
 
 ```bash
 source .venv/bin/activate
-cd external/gaussian-splatting
-python -m pip install -e submodules/diff-gaussian-rasterization
-python -m pip install -e submodules/simple-knn
-cd /home/jovyan/bts
+./scripts/build_3dgs_extensions.sh
 ```
 
 Nếu máy có nhiều loại GPU, có thể set kiến trúc CUDA trước khi build. Ví dụ L40S:
@@ -149,7 +140,7 @@ Một vài mốc thường gặp:
 
 ## 4. Prepare data cho 3DGS
 
-Các script trong repo chạy bằng `pwsh`. Để script luôn dùng đúng Python trong `.venv`, export biến môi trường:
+Các script shell trong repo sẽ tự tìm `.venv/bin/python`. Nếu muốn ép dùng đúng interpreter, export biến môi trường:
 
 ```bash
 export PYTHON="$(pwd)/.venv/bin/python"
@@ -158,17 +149,17 @@ export PYTHON="$(pwd)/.venv/bin/python"
 Prepare toàn bộ public set:
 
 ```bash
-pwsh -File ./scripts/prepare_3dgs_scene.ps1 \
-  -DataRoot phase1/public_set \
-  -OutRoot prepared/3dgs_public
+./scripts/prepare_3dgs_scene.sh \
+  --data-root phase1/public_set \
+  --out-root prepared/3dgs_public
 ```
 
 Prepare toàn bộ private set:
 
 ```bash
-pwsh -File ./scripts/prepare_3dgs_scene.ps1 \
-  -DataRoot phase1/private_set1 \
-  -OutRoot prepared/3dgs_private
+./scripts/prepare_3dgs_scene.sh \
+  --data-root phase1/private_set1 \
+  --out-root prepared/3dgs_private
 ```
 
 Nếu prepare trên một máy rồi train trên máy khác, cần copy cả repo, `phase1/` và `prepared/` sang máy train. Bước render/evaluate cần giữ nguyên `test/test_poses.csv` trong `phase1/*`.
@@ -176,10 +167,10 @@ Nếu prepare trên một máy rồi train trên máy khác, cần copy cả rep
 Prepare một scene để smoke test:
 
 ```bash
-pwsh -File ./scripts/prepare_3dgs_scene.ps1 \
-  -DataRoot phase1/public_set \
-  -Scene hcm0031 \
-  -OutRoot prepared/3dgs_public
+./scripts/prepare_3dgs_scene.sh \
+  --data-root phase1/public_set \
+  --scene hcm0031 \
+  --out-root prepared/3dgs_public
 ```
 
 Output mỗi scene:
@@ -198,7 +189,7 @@ Mặc định script chuyển camera sang `PINHOLE` approximation vì official 3
 
 ## 5. Preset train 3DGS
 
-Preset được định nghĩa trong `scripts/_3dgs_train_profiles.ps1`.
+Preset được định nghĩa trong `scripts/_3dgs_train_profiles.sh`.
 
 | Preset | Khi dùng | Resolution | Iterations | Optimizer | Antialiasing | Ghi chú |
 |---|---|---:|---:|---|---|---|
@@ -211,7 +202,7 @@ Preset được định nghĩa trong `scripts/_3dgs_train_profiles.ps1`.
 Nếu CUDA extension không hỗ trợ `sparse_adam`, truyền thêm:
 
 ```text
--OptimizerType default
+--optimizer-type default
 ```
 
 Các script sẽ tự fallback về `default` nếu phát hiện môi trường hiện tại không dùng được accelerated rasterizer, nhưng chạy chậm hơn so với `sparse_adam`.
@@ -221,29 +212,29 @@ Các script sẽ tự fallback về `default` nếu phát hiện môi trường 
 Smoke test:
 
 ```bash
-pwsh -File ./scripts/train_3dgs_scene.ps1 \
-  -PreparedScene prepared/3dgs_public/hcm0031 \
-  -ModelDir outputs/3dgs_models_public_smoke/hcm0031 \
-  -Preset local-r2-7k
+./scripts/train_3dgs_scene.sh \
+  --prepared-scene prepared/3dgs_public/hcm0031 \
+  --model-dir outputs/3dgs_models_public_smoke/hcm0031 \
+  --preset local-r2-7k
 ```
 
 Train chất lượng cao:
 
 ```bash
-pwsh -File ./scripts/train_3dgs_scene.ps1 \
-  -PreparedScene prepared/3dgs_public/hcm0031 \
-  -ModelDir outputs/3dgs_models_public_quality/hcm0031 \
-  -Preset l40s-quality
+./scripts/train_3dgs_scene.sh \
+  --prepared-scene prepared/3dgs_public/hcm0031 \
+  --model-dir outputs/3dgs_models_public_quality/hcm0031 \
+  --preset l40s-quality
 ```
 
 Chọn GPU cụ thể:
 
 ```bash
-pwsh -File ./scripts/train_3dgs_scene.ps1 \
-  -PreparedScene prepared/3dgs_public/hcm0031 \
-  -ModelDir outputs/3dgs_models_public_quality/hcm0031 \
-  -Preset l40s-quality \
-  -CudaVisibleDevices 0
+./scripts/train_3dgs_scene.sh \
+  --prepared-scene prepared/3dgs_public/hcm0031 \
+  --model-dir outputs/3dgs_models_public_quality/hcm0031 \
+  --preset l40s-quality \
+  --cuda-visible-devices 0
 ```
 
 Output chính:
@@ -259,56 +250,56 @@ outputs/3dgs_models_public_quality/hcm0031/
 Train toàn bộ public set:
 
 ```bash
-pwsh -File ./scripts/train_3dgs_batch.ps1 \
-  -PreparedRoot prepared/3dgs_public \
-  -ModelRoot outputs/3dgs_models_public_quality \
-  -Preset l40s-quality \
-  -Force
+./scripts/train_3dgs_batch.sh \
+  --prepared-root prepared/3dgs_public \
+  --model-root outputs/3dgs_models_public_quality \
+  --preset l40s-quality \
+  --force
 ```
 
 Train một nhóm scene:
 
 ```bash
-pwsh -File ./scripts/train_3dgs_batch.ps1 \
-  -PreparedRoot prepared/3dgs_public \
-  -ModelRoot outputs/3dgs_models_public_quality \
-  -Preset l40s-quality \
-  -Scene hcm0031,hcm0034
+./scripts/train_3dgs_batch.sh \
+  --prepared-root prepared/3dgs_public \
+  --model-root outputs/3dgs_models_public_quality \
+  --preset l40s-quality \
+  --scene hcm0031,hcm0034
 ```
 
 Train BTS-sharpness profile:
 
 ```bash
-pwsh -File ./scripts/train_3dgs_batch.ps1 \
-  -PreparedRoot prepared/3dgs_public \
-  -ModelRoot outputs/3dgs_models_public_bts_quality \
-  -Preset l40s-bts-quality \
-  -Force
+./scripts/train_3dgs_batch.sh \
+  --prepared-root prepared/3dgs_public \
+  --model-root outputs/3dgs_models_public_bts_quality \
+  --preset l40s-bts-quality \
+  --force
 ```
 
 Train local trên GPU 6 GB ở half resolution:
 
 ```bash
-pwsh -File ./scripts/train_3dgs_batch.ps1 \
-  -PreparedRoot prepared/3dgs_public \
-  -ModelRoot outputs/3dgs_models_public_local_bts_r2 \
-  -Preset l40s-bts-quality \
-  -Resolution 2 \
-  -Force
+./scripts/train_3dgs_batch.sh \
+  --prepared-root prepared/3dgs_public \
+  --model-root outputs/3dgs_models_public_local_bts_r2 \
+  --preset l40s-bts-quality \
+  --resolution 2 \
+  --force
 ```
 
 Nếu buộc phải train full resolution trên GPU nhỏ, có thể tắt densification và bỏ train-time eval để giảm áp lực VRAM:
 
 ```bash
-pwsh -File ./scripts/train_3dgs_batch.ps1 \
-  -PreparedRoot prepared/3dgs_public \
-  -ModelRoot outputs/3dgs_models_public_local_r1 \
-  -Preset l40s-bts-quality \
-  -Resolution 1 \
-  -OptimizerType default \
-  -DensifyUntilIter 0 \
-  -SkipTrainEval \
-  -Force
+./scripts/train_3dgs_batch.sh \
+  --prepared-root prepared/3dgs_public \
+  --model-root outputs/3dgs_models_public_local_r1 \
+  --preset l40s-bts-quality \
+  --resolution 1 \
+  --optimizer-type default \
+  --densify-until-iter 0 \
+  --skip-train-eval \
+  --force
 ```
 
 Nếu không truyền `-Force`, script sẽ tự skip scene đã có `point_cloud/iteration_<iterations>/point_cloud.ply`.
@@ -318,42 +309,43 @@ Nếu không truyền `-Force`, script sẽ tự skip scene đã có `point_clou
 Ví dụ train 20k iterations, full resolution, optimizer mặc định:
 
 ```bash
-pwsh -File ./scripts/train_3dgs_batch.ps1 \
-  -PreparedRoot prepared/3dgs_public \
-  -ModelRoot outputs/3dgs_models_public_custom20k \
-  -Preset custom \
-  -Iterations 20000 \
-  -Resolution 1 \
-  -OptimizerType default \
-  -Antialiasing \
-  -SaveIterations 10000,20000 \
-  -TestIterations 20000 \
-  -CheckpointIterations 20000 \
-  -DensifyUntilIter 12000 \
-  -DensifyGradThreshold 0.0002 \
-  -DensificationInterval 100 \
-  -OpacityResetInterval 3000
+./scripts/train_3dgs_batch.sh \
+  --prepared-root prepared/3dgs_public \
+  --model-root outputs/3dgs_models_public_custom20k \
+  --preset custom \
+  --iterations 20000 \
+  --resolution 1 \
+  --optimizer-type default \
+  --antialiasing \
+  --save-iterations 10000,20000 \
+  --test-iterations 20000 \
+  --checkpoint-iterations 20000 \
+  --densify-until-iter 12000 \
+  --densify-grad-threshold 0.0002 \
+  --densification-interval 100 \
+  --opacity-reset-interval 3000
 ```
 
 Truyền raw args cho official `train.py`:
 
 ```bash
-pwsh -File ./scripts/train_3dgs_scene.ps1 \
-  -PreparedScene prepared/3dgs_public/hcm0031 \
-  -ModelDir outputs/3dgs_models_public_custom/hcm0031 \
-  -Preset custom \
-  -Iterations 30000 \
-  -ExtraArgs "--lambda_dssim","0.15"
+./scripts/train_3dgs_scene.sh \
+  --prepared-scene prepared/3dgs_public/hcm0031 \
+  --model-dir outputs/3dgs_models_public_custom/hcm0031 \
+  --preset custom \
+  --iterations 30000 \
+  --extra-arg --lambda_dssim \
+  --extra-arg 0.15
 ```
 
 Resume từ checkpoint:
 
 ```bash
-pwsh -File ./scripts/train_3dgs_scene.ps1 \
-  -PreparedScene prepared/3dgs_public/hcm0031 \
-  -ModelDir outputs/3dgs_models_public_quality/hcm0031 \
-  -Preset l40s-quality \
-  -StartCheckpoint outputs/3dgs_models_public_quality/hcm0031/chkpnt15000.pth
+./scripts/train_3dgs_scene.sh \
+  --prepared-scene prepared/3dgs_public/hcm0031 \
+  --model-dir outputs/3dgs_models_public_quality/hcm0031 \
+  --preset l40s-quality \
+  --start-checkpoint outputs/3dgs_models_public_quality/hcm0031/chkpnt15000.pth
 ```
 
 ## 9. Render, validate và evaluate public
@@ -361,77 +353,77 @@ pwsh -File ./scripts/train_3dgs_scene.ps1 \
 Render public:
 
 ```bash
-pwsh -File ./scripts/render_3dgs_submission.ps1 \
-  -DataRoot phase1/public_set \
-  -ModelRoot outputs/3dgs_models_public_quality \
-  -OutDir outputs/3dgs_public_quality \
-  -Antialiasing
+./scripts/render_3dgs_submission.sh \
+  --data-root phase1/public_set \
+  --model-root outputs/3dgs_models_public_quality \
+  --out-dir outputs/3dgs_public_quality \
+  --antialiasing
 ```
 
 Validate format output:
 
 ```bash
-pwsh -File ./scripts/validate_submission.ps1 \
-  -DataRoot phase1/public_set \
-  -PredDir outputs/3dgs_public_quality
+./scripts/validate_submission.sh \
+  --data-root phase1/public_set \
+  --pred-dir outputs/3dgs_public_quality
 ```
 
 Evaluate public:
 
 ```bash
-pwsh -File ./scripts/evaluate_public.ps1 \
-  -DataRoot phase1/public_set \
-  -PredDir outputs/3dgs_public_quality \
-  -Lpips on \
-  -OutputCsv reports/3dgs_public_quality_metrics.csv
+./scripts/evaluate_public.sh \
+  --data-root phase1/public_set \
+  --pred-dir outputs/3dgs_public_quality \
+  --lpips on \
+  --output-csv reports/3dgs_public_quality_metrics.csv
 ```
 
 Nếu model train bằng `l40s-bts-quality`, nên thử render thêm với splat nhỏ hơn:
 
 ```bash
-pwsh -File ./scripts/render_3dgs_submission.ps1 \
-  -DataRoot phase1/public_set \
-  -ModelRoot outputs/3dgs_models_public_bts_quality \
-  -OutDir outputs/3dgs_public_bts_quality_scale09 \
-  -ScalingModifier 0.9
+./scripts/render_3dgs_submission.sh \
+  --data-root phase1/public_set \
+  --model-root outputs/3dgs_models_public_bts_quality \
+  --out-dir outputs/3dgs_public_bts_quality_scale09 \
+  --scaling-modifier 0.9
 ```
 
-`-ScalingModifier 0.8` hoặc `0.9` đôi khi cải thiện chi tiết mảnh, nhưng cần evaluate lại để tránh thủng hình.
+`--scaling-modifier 0.8` hoặc `0.9` đôi khi cải thiện chi tiết mảnh, nhưng cần evaluate lại để tránh thủng hình.
 
 ## 10. Train private và đóng gói submission
 
 Train private:
 
 ```bash
-pwsh -File ./scripts/train_3dgs_batch.ps1 \
-  -PreparedRoot prepared/3dgs_private \
-  -ModelRoot outputs/3dgs_models_private_quality \
-  -Preset l40s-quality \
-  -Force
+./scripts/train_3dgs_batch.sh \
+  --prepared-root prepared/3dgs_private \
+  --model-root outputs/3dgs_models_private_quality \
+  --preset l40s-quality \
+  --force
 ```
 
 Render private và tạo zip:
 
 ```bash
-pwsh -File ./scripts/render_3dgs_submission.ps1 \
-  -DataRoot phase1/private_set1 \
-  -ModelRoot outputs/3dgs_models_private_quality \
-  -OutDir outputs/3dgs_private_quality \
-  -Antialiasing \
-  -ZipPath submissions/3dgs_private_quality.zip
+./scripts/render_3dgs_submission.sh \
+  --data-root phase1/private_set1 \
+  --model-root outputs/3dgs_models_private_quality \
+  --out-dir outputs/3dgs_private_quality \
+  --antialiasing \
+  --zip submissions/3dgs_private_quality.zip
 ```
 
 Validate private output:
 
 ```bash
-pwsh -File ./scripts/validate_submission.ps1 \
-  -DataRoot phase1/private_set1 \
-  -PredDir outputs/3dgs_private_quality
+./scripts/validate_submission.sh \
+  --data-root phase1/private_set1 \
+  --pred-dir outputs/3dgs_private_quality
 ```
 
 ## 11. Workflow khuyến nghị
 
-1. Cài Python, Torch CUDA, `pwsh` và official 3DGS.
+1. Cài Python, Torch CUDA và official 3DGS.
 2. Prepare `public_set` và `private_set1`.
 3. Smoke test `hcm0031` bằng `local-r2-7k`.
 4. Render/evaluate smoke test để xác nhận pipeline đúng.
@@ -484,33 +476,33 @@ Build extension fail
 
 Train lỗi ở `sparse_adam`
 
-: Chạy lại với `-OptimizerType default`.
+: Chạy lại với `--optimizer-type default`.
 
 Hết VRAM
 
-: Dùng `local-r2-7k`, hoặc override `-Resolution 2`, giảm iterations, tắt antialiasing, hoặc train từng scene.
+: Dùng `local-r2-7k`, hoặc override `--resolution 2`, giảm iterations, tắt antialiasing, hoặc train từng scene.
 
 Render thiếu file hoặc sai kích thước
 
-: Luôn chạy `validate_submission.ps1` sau render.
+: Luôn chạy `validate_submission.sh` sau render.
 
 Metric public không có LPIPS
 
-: Cài `requirements-lpips.txt` và chạy `evaluate_public.ps1 -Lpips on`.
+: Cài `requirements-lpips.txt` và chạy `evaluate_public.sh --lpips on`.
 
 ## 14. Baseline phụ
 
 Khi 3DGS chưa build xong, có thể chạy baseline để kiểm tra format và metric:
 
 ```bash
-pwsh -File ./scripts/run_nearest_baseline.ps1 \
-  -DataRoot phase1/public_set \
-  -OutDir outputs/nearest_public
+./scripts/run_nearest_baseline.sh \
+  --data-root phase1/public_set \
+  --out-dir outputs/nearest_public
 
-pwsh -File ./scripts/run_point_splat_baseline.ps1 \
-  -DataRoot phase1/public_set \
-  -OutDir outputs/point_splat_public \
-  -ModelDir outputs/point_splat_models_public
+./scripts/run_point_splat_baseline.sh \
+  --data-root phase1/public_set \
+  --out-dir outputs/point_splat_public \
+  --model-dir outputs/point_splat_models_public
 ```
 
 Các baseline này không thay thế 3DGS, nhưng rất hữu ích để kiểm tra data, validation, packaging và flow đánh giá trước khi chạy train GPU dài.

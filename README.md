@@ -1,5 +1,7 @@
 # BTS Digital Twin - 3DGS trên Ubuntu
 
+./scripts/run_3dgs_public_improvement_experiments.sh
+
 Repo này dùng cho pipeline Novel View Synthesis / Digital Twin với official 3D Gaussian Splatting (3DGS): prepare data, train, render, evaluate public set và đóng gói submission cho private set.
 
 `README.md` là tài liệu hướng dẫn chính của repo. Nội dung từ `docs.md` cũ đã được gộp vào đây để chỉ còn một nguồn tham chiếu.

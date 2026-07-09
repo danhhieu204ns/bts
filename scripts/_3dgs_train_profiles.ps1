@@ -287,8 +287,8 @@ function Invoke-3DgsLoggedProcess {
         New-Item -ItemType Directory -Force -Path $logParent | Out-Null
     }
 
-    $isWindows = [System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT
-    if ($isWindows) {
+    $IsWinOS = [System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT
+    if ($IsWinOS) {
         $rawCommandArgs = @($FilePath) + $ArgumentList
         $command = (ConvertTo-3DgsQuotedCommand -ArgsList $rawCommandArgs) + ' > "' + $LogPath + '" 2>&1'
         & cmd.exe /d /s /c $command

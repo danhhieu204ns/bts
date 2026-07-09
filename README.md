@@ -1,16 +1,16 @@
-# BTS Digital Twin - hướng dẫn train 3DGS
+# BTS Digital Twin - 3DGS trên Ubuntu
 
-Repo này phục vụ bài toán Novel View Synthesis / Digital Twin. Pipeline chính trong
-repo là train và render bằng official 3D Gaussian Splatting (3DGS), sau đó validate,
-evaluate trên public set và đóng gói submission cho private set.
+Repo này dùng cho pipeline Novel View Synthesis / Digital Twin với official 3D Gaussian Splatting (3DGS): prepare data, train, render, evaluate public set và đóng gói submission cho private set.
 
-Các lệnh bên dưới mặc định chạy từ thư mục gốc repo:
+`README.md` là tài liệu hướng dẫn chính của repo. Nội dung từ `docs.md` cũ đã được gộp vào đây để chỉ còn một nguồn tham chiếu.
 
-```powershell
-cd E:\WORKSPACE\bts_digital_twin
+Toàn bộ hướng dẫn bên dưới giả định chạy trên Ubuntu và đứng tại thư mục gốc repo:
+
+```bash
+cd /home/jovyan/bts
 ```
 
-## 1. Cấu trúc data cần có
+## 1. Cấu trúc dữ liệu
 
 Data contest được đặt trong `phase1/`:
 
@@ -39,51 +39,70 @@ Mỗi scene có cấu trúc:
 train/images/
 train/sparse/0/{cameras.bin,images.bin,points3D.bin}
 test/test_poses.csv
-test/images/              # chỉ có ở public set, dùng để evaluate local
+test/images/              # chỉ có ở public set để evaluate local
 ```
 
-Lưu ý quan trọng: `train/sparse/0/images.bin` của contest có thể chứa cả train và
-test pose. Vì official 3DGS loader mở ảnh theo toàn bộ `images.bin`, repo này có
-bước prepare riêng để lọc lại chỉ còn train images trước khi train.
+Lưu ý: `train/sparse/0/images.bin` của contest có thể chứa cả train và test pose. Repo này có bước prepare riêng để lọc lại chỉ còn train images trước khi train với official 3DGS.
 
-## 2. Cài môi trường Python
+## 2. Cài môi trường Ubuntu
+
+Cài gói hệ thống:
+
+```bash
+sudo apt update
+sudo apt install -y \
+  git \
+  curl \
+  build-essential \
+  cmake \
+  ninja-build \
+  python3.11 \
+  python3.11-venv \
+  python3-pip
+```
+
+Cài `pwsh` nếu máy chưa có, vì các helper script trong repo hiện là `.ps1`:
+
+```bash
+sudo apt install -y powershell
+```
 
 Tạo virtual environment:
 
-```powershell
-py -3.11 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --upgrade pip setuptools wheel
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip setuptools wheel
 ```
 
-Cài dependency core để đọc data, validate và evaluate:
+Cài dependency core:
 
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```bash
+python -m pip install -r requirements.txt
 ```
 
-Cài PyTorch CUDA phù hợp với máy train trước khi cài các package phụ. Ví dụ nếu
-dùng Torch CUDA 12.6:
+Cài PyTorch CUDA phù hợp với driver/GPU. Ví dụ CUDA 12.6:
 
-```powershell
-.\.venv\Scripts\python.exe -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+```bash
+python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
 ```
 
 Cài dependency phụ cho 3DGS helper script:
 
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-3dgs.txt
+```bash
+python -m pip install -r requirements-3dgs.txt
 ```
 
-Cài LPIPS nếu muốn tính local final score đầy đủ trên public set:
+Cài LPIPS nếu muốn tính local final score trên public set:
 
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-lpips.txt
+```bash
+python -m pip install -r requirements-lpips.txt
 ```
 
 Kiểm tra Python, Torch và GPU:
 
-```powershell
-@"
+```bash
+python - <<'PY'
 import torch
 print("torch", torch.__version__)
 print("torch cuda", torch.version.cuda)
@@ -91,47 +110,36 @@ print("cuda available", torch.cuda.is_available())
 if torch.cuda.is_available():
     print("device", torch.cuda.get_device_name(0))
     print("capability", torch.cuda.get_device_capability(0))
-"@ | .\.venv\Scripts\python.exe -
+PY
 ```
 
 ## 3. Cài official 3DGS
 
-Official repo nằm ở `external/gaussian-splatting`. Nếu thư mục này chưa có:
+Clone repo chính thức vào `external/gaussian-splatting`:
 
-```powershell
-New-Item -ItemType Directory -Force external | Out-Null
+```bash
+mkdir -p external
 git clone --recursive https://github.com/graphdeco-inria/gaussian-splatting external/gaussian-splatting
 git -C external/gaussian-splatting submodule update --init --recursive
 ```
 
-3DGS cần build CUDA extension. Trên Windows, cấu hình dễ ổn định nhất là:
+Trên Ubuntu, cần CUDA Toolkit tương thích với `torch.version.cuda`. Sau đó build extension:
 
-- GPU NVIDIA có CUDA.
-- PyTorch CUDA runtime khớp với CUDA Toolkit để build extension.
-- Visual Studio 2022 Build Tools có workload C++.
-- NVIDIA CUDA Toolkit chỉ là một phần; vẫn cần VS Build Tools để có `cl.exe` và `VsDevCmd.bat`.
-- CUDA Toolkit tương ứng, ví dụ `v12.6` nếu Torch là `cu126`.
-
-Build extension trên Windows:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build_3dgs_extensions_windows.ps1 `
-  -Python .\.venv\Scripts\python.exe `
-  -CudaPath "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.6" `
-  -ForceReinstall
+```bash
+source .venv/bin/activate
+cd external/gaussian-splatting
+python -m pip install -e submodules/diff-gaussian-rasterization
+python -m pip install -e submodules/simple-knn
+cd /home/jovyan/bts
 ```
 
-Script sẽ tự detect `TORCH_CUDA_ARCH_LIST` từ GPU đầu tiên. Chỉ truyền tay nếu cần override,
-ví dụ RTX 3050 / RTX 30xx dùng `-TorchCudaArchList "8.6"`, RTX 40xx dùng `"8.9"`.
+Nếu máy có nhiều loại GPU, có thể set kiến trúc CUDA trước khi build. Ví dụ L40S:
 
-Nếu gặp lỗi `running scripts is disabled`, dùng đúng mẫu lệnh `powershell -ExecutionPolicy Bypass -File`
-ở trên thay vì chạy trực tiếp file `.ps1`.
+```bash
+export TORCH_CUDA_ARCH_LIST="8.9"
+```
 
-Nếu script báo Python 3.13/3.14, tạo lại `.venv` bằng Python 3.11 hoặc 3.12 rồi cài lại Torch `cu126`.
-Nếu script báo chỉ thấy Visual Studio Build Tools 2026/18.x, cài Visual Studio 2022 Build Tools với workload
-`Desktop development with C++`. CUDA 12.6 có thể crash `cudafe++` với MSVC quá mới.
-
-`TorchCudaArchList` phụ thuộc GPU:
+Một vài mốc thường gặp:
 
 ```text
 8.6  RTX 30xx / A10
@@ -139,40 +147,39 @@ Nếu script báo chỉ thấy Visual Studio Build Tools 2026/18.x, cài Visual 
 9.0  H100
 ```
 
-Nếu train trên Linux/L40S, có thể dùng `pwsh` để chạy các script `.ps1`. Trước khi
-chạy, trỏ Python một lần:
-
-```powershell
-$env:PYTHON = ".venv/bin/python"
-```
-
-Hoặc truyền trực tiếp `-Python .venv/bin/python` vào từng script.
-
 ## 4. Prepare data cho 3DGS
+
+Các script trong repo chạy bằng `pwsh`. Để script luôn dùng đúng Python trong `.venv`, export biến môi trường:
+
+```bash
+export PYTHON="$(pwd)/.venv/bin/python"
+```
 
 Prepare toàn bộ public set:
 
-```powershell
-.\scripts\prepare_3dgs_scene.ps1 `
-  -DataRoot phase1\public_set `
-  -OutRoot prepared\3dgs_public
+```bash
+pwsh -File ./scripts/prepare_3dgs_scene.ps1 \
+  -DataRoot phase1/public_set \
+  -OutRoot prepared/3dgs_public
 ```
 
 Prepare toàn bộ private set:
 
-```powershell
-.\scripts\prepare_3dgs_scene.ps1 `
-  -DataRoot phase1\private_set1 `
-  -OutRoot prepared\3dgs_private
+```bash
+pwsh -File ./scripts/prepare_3dgs_scene.ps1 \
+  -DataRoot phase1/private_set1 \
+  -OutRoot prepared/3dgs_private
 ```
 
-Prepare một scene để smoke test nhanh:
+Nếu prepare trên một máy rồi train trên máy khác, cần copy cả repo, `phase1/` và `prepared/` sang máy train. Bước render/evaluate cần giữ nguyên `test/test_poses.csv` trong `phase1/*`.
 
-```powershell
-.\scripts\prepare_3dgs_scene.ps1 `
-  -DataRoot phase1\public_set `
-  -Scene hcm0031 `
-  -OutRoot prepared\3dgs_public
+Prepare một scene để smoke test:
+
+```bash
+pwsh -File ./scripts/prepare_3dgs_scene.ps1 \
+  -DataRoot phase1/public_set \
+  -Scene hcm0031 \
+  -OutRoot prepared/3dgs_public
 ```
 
 Output mỗi scene:
@@ -187,59 +194,59 @@ prepared/3dgs_public/hcm0031/
     points3D.bin
 ```
 
-Mặc định script chuyển camera sang `PINHOLE` approximation vì official 3DGS loader
-nhận tốt `PINHOLE` / `SIMPLE_PINHOLE`. Bản camera gốc được giữ ở
-`cameras_original.bin`.
+Mặc định script chuyển camera sang `PINHOLE` approximation vì official 3DGS loader đọc ổn định hơn với `PINHOLE` / `SIMPLE_PINHOLE`.
 
-## 5. Các mode train 3DGS
+## 5. Preset train 3DGS
 
 Preset được định nghĩa trong `scripts/_3dgs_train_profiles.ps1`.
 
 | Preset | Khi dùng | Resolution | Iterations | Optimizer | Antialiasing | Ghi chú |
 |---|---|---:|---:|---|---|---|
-| `local-r2-7k` | Smoke test/local GPU vừa phải | `2` | `7000` | `default` | off | Nhanh, dùng để kiểm tra pipeline. |
+| `local-r2-7k` | Smoke test hoặc GPU local nhỏ | `2` | `7000` | `default` | off | Nhanh để kiểm tra pipeline. |
 | `l40s-fast` | Chạy nhanh trên L40S | `1` | `15000` | `sparse_adam` | on | Cân bằng tốc độ và chất lượng. |
-| `l40s-quality` | Mode khuyến nghị đầu tiên | `1` | `30000` | `sparse_adam` | on | Chạy full public/private để lấy benchmark chính. |
-| `l40s-bts-quality` | Ưu tiên chi tiết mảnh BTS | `1` | `30000` | `sparse_adam` | off | Densify dày hơn, chậm hơn, thử sau `l40s-quality`. |
-| `custom` | Tự override tham số | tùy chọn | tùy chọn | tùy chọn | tùy chọn | Dùng khi cần sweep tham số. |
+| `l40s-quality` | Preset khuyến nghị đầu tiên | `1` | `30000` | `sparse_adam` | on | Mode benchmark chính. |
+| `l40s-bts-quality` | Ưu tiên chi tiết mảnh | `1` | `30000` | `sparse_adam` | off | Densify dày hơn, chậm hơn. |
+| `custom` | Tự override tham số | tùy chọn | tùy chọn | tùy chọn | tùy chọn | Dùng khi sweep tham số. |
 
 Nếu CUDA extension không hỗ trợ `sparse_adam`, truyền thêm:
 
-```powershell
+```text
 -OptimizerType default
 ```
 
+Các script sẽ tự fallback về `default` nếu phát hiện môi trường hiện tại không dùng được accelerated rasterizer, nhưng chạy chậm hơn so với `sparse_adam`.
+
 ## 6. Train một scene
 
-Smoke test một scene public:
+Smoke test:
 
-```powershell
-.\scripts\train_3dgs_scene.ps1 `
-  -PreparedScene prepared\3dgs_public\hcm0031 `
-  -ModelDir outputs\3dgs_models_public_smoke\hcm0031 `
+```bash
+pwsh -File ./scripts/train_3dgs_scene.ps1 \
+  -PreparedScene prepared/3dgs_public/hcm0031 \
+  -ModelDir outputs/3dgs_models_public_smoke/hcm0031 \
   -Preset local-r2-7k
 ```
 
-Train một scene chất lượng cao:
+Train chất lượng cao:
 
-```powershell
-.\scripts\train_3dgs_scene.ps1 `
-  -PreparedScene prepared\3dgs_public\hcm0031 `
-  -ModelDir outputs\3dgs_models_public_quality\hcm0031 `
+```bash
+pwsh -File ./scripts/train_3dgs_scene.ps1 \
+  -PreparedScene prepared/3dgs_public/hcm0031 \
+  -ModelDir outputs/3dgs_models_public_quality/hcm0031 \
   -Preset l40s-quality
 ```
 
-Train trên GPU cụ thể:
+Chọn GPU cụ thể:
 
-```powershell
-.\scripts\train_3dgs_scene.ps1 `
-  -PreparedScene prepared\3dgs_public\hcm0031 `
-  -ModelDir outputs\3dgs_models_public_quality\hcm0031 `
-  -Preset l40s-quality `
+```bash
+pwsh -File ./scripts/train_3dgs_scene.ps1 \
+  -PreparedScene prepared/3dgs_public/hcm0031 \
+  -ModelDir outputs/3dgs_models_public_quality/hcm0031 \
+  -Preset l40s-quality \
   -CudaVisibleDevices 0
 ```
 
-Output model chính:
+Output chính:
 
 ```text
 outputs/3dgs_models_public_quality/hcm0031/
@@ -249,189 +256,219 @@ outputs/3dgs_models_public_quality/hcm0031/
 
 ## 7. Train batch nhiều scene
 
-Train toàn bộ public set bằng mode quality:
+Train toàn bộ public set:
 
-```powershell
-.\scripts\train_3dgs_batch.ps1 `
-  -PreparedRoot prepared\3dgs_public `
-  -ModelRoot outputs\3dgs_models_public_quality `
-  -Preset l40s-quality `
+```bash
+pwsh -File ./scripts/train_3dgs_batch.ps1 \
+  -PreparedRoot prepared/3dgs_public \
+  -ModelRoot outputs/3dgs_models_public_quality \
+  -Preset l40s-quality \
   -Force
 ```
 
-Train chỉ một vài scene trong prepared root:
+Train một nhóm scene:
 
-```powershell
-.\scripts\train_3dgs_batch.ps1 `
-  -PreparedRoot prepared\3dgs_public `
-  -ModelRoot outputs\3dgs_models_public_quality `
-  -Preset l40s-quality `
+```bash
+pwsh -File ./scripts/train_3dgs_batch.ps1 \
+  -PreparedRoot prepared/3dgs_public \
+  -ModelRoot outputs/3dgs_models_public_quality \
+  -Preset l40s-quality \
   -Scene hcm0031,hcm0034
 ```
 
 Train BTS-sharpness profile:
 
-```powershell
-.\scripts\train_3dgs_batch.ps1 `
-  -PreparedRoot prepared\3dgs_public `
-  -ModelRoot outputs\3dgs_models_public_bts_quality `
-  -Preset l40s-bts-quality `
+```bash
+pwsh -File ./scripts/train_3dgs_batch.ps1 \
+  -PreparedRoot prepared/3dgs_public \
+  -ModelRoot outputs/3dgs_models_public_bts_quality \
+  -Preset l40s-bts-quality \
   -Force
 ```
 
-Nếu không truyền `-Force`, script sẽ skip scene đã có:
+Train local trên GPU 6 GB ở half resolution:
 
-```text
-point_cloud/iteration_<iterations>/point_cloud.ply
+```bash
+pwsh -File ./scripts/train_3dgs_batch.ps1 \
+  -PreparedRoot prepared/3dgs_public \
+  -ModelRoot outputs/3dgs_models_public_local_bts_r2 \
+  -Preset l40s-bts-quality \
+  -Resolution 2 \
+  -Force
 ```
 
-## 8. Train custom
+Nếu buộc phải train full resolution trên GPU nhỏ, có thể tắt densification và bỏ train-time eval để giảm áp lực VRAM:
 
-Ví dụ train full resolution 20k iterations, dùng optimizer default:
+```bash
+pwsh -File ./scripts/train_3dgs_batch.ps1 \
+  -PreparedRoot prepared/3dgs_public \
+  -ModelRoot outputs/3dgs_models_public_local_r1 \
+  -Preset l40s-bts-quality \
+  -Resolution 1 \
+  -OptimizerType default \
+  -DensifyUntilIter 0 \
+  -SkipTrainEval \
+  -Force
+```
 
-```powershell
-.\scripts\train_3dgs_batch.ps1 `
-  -PreparedRoot prepared\3dgs_public `
-  -ModelRoot outputs\3dgs_models_public_custom20k `
-  -Preset custom `
-  -Iterations 20000 `
-  -Resolution 1 `
-  -OptimizerType default `
-  -Antialiasing `
-  -SaveIterations 10000,20000 `
-  -TestIterations 20000 `
-  -CheckpointIterations 20000 `
-  -DensifyUntilIter 12000 `
-  -DensifyGradThreshold 0.0002 `
-  -DensificationInterval 100 `
+Nếu không truyền `-Force`, script sẽ tự skip scene đã có `point_cloud/iteration_<iterations>/point_cloud.ply`.
+
+## 8. Train custom và resume
+
+Ví dụ train 20k iterations, full resolution, optimizer mặc định:
+
+```bash
+pwsh -File ./scripts/train_3dgs_batch.ps1 \
+  -PreparedRoot prepared/3dgs_public \
+  -ModelRoot outputs/3dgs_models_public_custom20k \
+  -Preset custom \
+  -Iterations 20000 \
+  -Resolution 1 \
+  -OptimizerType default \
+  -Antialiasing \
+  -SaveIterations 10000,20000 \
+  -TestIterations 20000 \
+  -CheckpointIterations 20000 \
+  -DensifyUntilIter 12000 \
+  -DensifyGradThreshold 0.0002 \
+  -DensificationInterval 100 \
   -OpacityResetInterval 3000
 ```
 
-Truyền tham số raw của official `train.py` qua `-ExtraArgs`:
+Truyền raw args cho official `train.py`:
 
-```powershell
-.\scripts\train_3dgs_scene.ps1 `
-  -PreparedScene prepared\3dgs_public\hcm0031 `
-  -ModelDir outputs\3dgs_models_public_custom\hcm0031 `
-  -Preset custom `
-  -Iterations 30000 `
+```bash
+pwsh -File ./scripts/train_3dgs_scene.ps1 \
+  -PreparedScene prepared/3dgs_public/hcm0031 \
+  -ModelDir outputs/3dgs_models_public_custom/hcm0031 \
+  -Preset custom \
+  -Iterations 30000 \
   -ExtraArgs "--lambda_dssim","0.15"
 ```
 
 Resume từ checkpoint:
 
-```powershell
-.\scripts\train_3dgs_scene.ps1 `
-  -PreparedScene prepared\3dgs_public\hcm0031 `
-  -ModelDir outputs\3dgs_models_public_quality\hcm0031 `
-  -Preset l40s-quality `
-  -StartCheckpoint outputs\3dgs_models_public_quality\hcm0031\chkpnt15000.pth
+```bash
+pwsh -File ./scripts/train_3dgs_scene.ps1 \
+  -PreparedScene prepared/3dgs_public/hcm0031 \
+  -ModelDir outputs/3dgs_models_public_quality/hcm0031 \
+  -Preset l40s-quality \
+  -StartCheckpoint outputs/3dgs_models_public_quality/hcm0031/chkpnt15000.pth
 ```
 
-## 9. Render public để evaluate
+## 9. Render, validate và evaluate public
 
-Render bằng model vừa train:
+Render public:
 
-```powershell
-.\scripts\render_3dgs_submission.ps1 `
-  -DataRoot phase1\public_set `
-  -ModelRoot outputs\3dgs_models_public_quality `
-  -OutDir outputs\3dgs_public_quality `
+```bash
+pwsh -File ./scripts/render_3dgs_submission.ps1 \
+  -DataRoot phase1/public_set \
+  -ModelRoot outputs/3dgs_models_public_quality \
+  -OutDir outputs/3dgs_public_quality \
   -Antialiasing
 ```
 
 Validate format output:
 
-```powershell
-.\scripts\validate_submission.ps1 `
-  -DataRoot phase1\public_set `
-  -PredDir outputs\3dgs_public_quality
+```bash
+pwsh -File ./scripts/validate_submission.ps1 \
+  -DataRoot phase1/public_set \
+  -PredDir outputs/3dgs_public_quality
 ```
 
 Evaluate public:
 
-```powershell
-.\scripts\evaluate_public.ps1 `
-  -DataRoot phase1\public_set `
-  -PredDir outputs\3dgs_public_quality `
-  -Lpips on `
-  -OutputCsv reports\3dgs_public_quality_metrics.csv
+```bash
+pwsh -File ./scripts/evaluate_public.ps1 \
+  -DataRoot phase1/public_set \
+  -PredDir outputs/3dgs_public_quality \
+  -Lpips on \
+  -OutputCsv reports/3dgs_public_quality_metrics.csv
 ```
 
-Nếu model train bằng `l40s-quality`, render với `-Antialiasing` trước. Nếu train
-bằng `l40s-bts-quality`, nên render không antialiasing trước, sau đó thử thêm:
+Nếu model train bằng `l40s-bts-quality`, nên thử render thêm với splat nhỏ hơn:
 
-```powershell
-.\scripts\render_3dgs_submission.ps1 `
-  -DataRoot phase1\public_set `
-  -ModelRoot outputs\3dgs_models_public_bts_quality `
-  -OutDir outputs\3dgs_public_bts_quality_scale09 `
+```bash
+pwsh -File ./scripts/render_3dgs_submission.ps1 \
+  -DataRoot phase1/public_set \
+  -ModelRoot outputs/3dgs_models_public_bts_quality \
+  -OutDir outputs/3dgs_public_bts_quality_scale09 \
   -ScalingModifier 0.9
 ```
 
-`-ScalingModifier 0.8` hoặc `0.9` đôi khi giúp splat mảnh hơn, nhưng cần evaluate
-public để kiểm tra có bị thủng hình hay không.
+`-ScalingModifier 0.8` hoặc `0.9` đôi khi cải thiện chi tiết mảnh, nhưng cần evaluate lại để tránh thủng hình.
 
 ## 10. Train private và đóng gói submission
 
-Sau khi chọn preset tốt nhất trên public, train private:
+Train private:
 
-```powershell
-.\scripts\train_3dgs_batch.ps1 `
-  -PreparedRoot prepared\3dgs_private `
-  -ModelRoot outputs\3dgs_models_private_quality `
-  -Preset l40s-quality `
+```bash
+pwsh -File ./scripts/train_3dgs_batch.ps1 \
+  -PreparedRoot prepared/3dgs_private \
+  -ModelRoot outputs/3dgs_models_private_quality \
+  -Preset l40s-quality \
   -Force
 ```
 
 Render private và tạo zip:
 
-```powershell
-.\scripts\render_3dgs_submission.ps1 `
-  -DataRoot phase1\private_set1 `
-  -ModelRoot outputs\3dgs_models_private_quality `
-  -OutDir outputs\3dgs_private_quality `
-  -Antialiasing `
-  -ZipPath submissions\3dgs_private_quality.zip
+```bash
+pwsh -File ./scripts/render_3dgs_submission.ps1 \
+  -DataRoot phase1/private_set1 \
+  -ModelRoot outputs/3dgs_models_private_quality \
+  -OutDir outputs/3dgs_private_quality \
+  -Antialiasing \
+  -ZipPath submissions/3dgs_private_quality.zip
 ```
 
 Validate private output:
 
-```powershell
-.\scripts\validate_submission.ps1 `
-  -DataRoot phase1\private_set1 `
-  -PredDir outputs\3dgs_private_quality
-```
-
-Zip submission có cấu trúc:
-
-```text
-3dgs_private_quality.zip
-  HCM0249/
-    ...
-  HCM0254/
-    ...
+```bash
+pwsh -File ./scripts/validate_submission.ps1 \
+  -DataRoot phase1/private_set1 \
+  -PredDir outputs/3dgs_private_quality
 ```
 
 ## 11. Workflow khuyến nghị
 
-1. Cài Python, Torch CUDA, official 3DGS và build CUDA extension.
-2. Prepare public/private:
-
-```powershell
-.\scripts\prepare_3dgs_scene.ps1 -DataRoot phase1\public_set -OutRoot prepared\3dgs_public
-.\scripts\prepare_3dgs_scene.ps1 -DataRoot phase1\private_set1 -OutRoot prepared\3dgs_private
-```
-
+1. Cài Python, Torch CUDA, `pwsh` và official 3DGS.
+2. Prepare `public_set` và `private_set1`.
 3. Smoke test `hcm0031` bằng `local-r2-7k`.
-4. Render/evaluate smoke test để chắc chắn pose, camera, output size đúng.
+4. Render/evaluate smoke test để xác nhận pipeline đúng.
 5. Train toàn bộ public bằng `l40s-quality`.
-6. Thử `l40s-bts-quality` trên public nếu còn thời gian/GPU.
+6. Nếu còn thời gian, thử `l40s-bts-quality` trên public.
 7. So sánh metric trong `reports/*.csv`.
 8. Train private bằng preset thắng trên public.
-9. Render private, validate, zip submission.
+9. Render private, validate và zip submission.
 
-## 12. Debug nhanh
+## 12. Tóm tắt training logs
+
+`logs/` hiện chứa log train thô cho các run `l40s-quality` đã hoàn tất. Bảng dưới gom các mốc chính vào một chỗ để không cần đọc từng file log.
+
+### Public runs
+
+| Scene | Init points | Iter | Train L1 | Train PSNR |
+|---|---:|---:|---:|---:|
+| `HCM0181` | 224928 | 30000 | 0.036418 | 24.1099 |
+| `HCM0193` | 214593 | 30000 | 0.037278 | 24.4261 |
+| `HCM0204` | 251715 | 30000 | 0.029069 | 25.9170 |
+| `hcm0031` | 211262 | 30000 | 0.033580 | 25.4861 |
+| `hcm0034` | 181413 | 30000 | 0.036673 | 24.0958 |
+
+### Private runs
+
+| Scene | Init points | Iter | Train L1 | Train PSNR |
+|---|---:|---:|---:|---:|
+| `HCM0249` | 165726 | 30000 | 0.040433 | 23.2628 |
+| `HCM0254` | 176590 | 30000 | 0.039068 | 23.7500 |
+| `HCM0276` | 220581 | 30000 | 0.041036 | 23.2403 |
+| `HCM1439` | 48347 | 30000 | 0.031182 | 25.7154 |
+| `HNI0131` | 147464 | 30000 | 0.064013 | 19.8893 |
+| `HNI0265` | 83992 | 30000 | 0.070282 | 19.6725 |
+| `HNI0366` | 145502 | 30000 | 0.032694 | 25.4328 |
+| `HNI0437` | 115026 | 30000 | 0.033225 | 25.2412 |
+
+## 13. Debug nhanh
 
 `official 3DGS repo not found`
 
@@ -439,40 +476,41 @@ Zip submission có cấu trúc:
 
 `torch.cuda.is_available() == False`
 
-: Cài sai PyTorch build, driver CUDA chưa đúng, hoặc máy train không thấy GPU.
+: Kiểm tra lại NVIDIA driver, build PyTorch CUDA và quyền truy cập GPU.
 
-Build extension fail vì CUDA / Torch / Visual Studio lệch version
+Build extension fail
 
-: Dùng CUDA Toolkit khớp với `torch.version.cuda`. Với Windows, ưu tiên VS 2022
-Build Tools cho CUDA 12.x. Chạy lại `scripts/build_3dgs_extensions_windows.ps1`.
+: Đảm bảo CUDA Toolkit khớp với `torch.version.cuda`, đã cài `build-essential`, và đã kích hoạt `.venv`.
 
 Train lỗi ở `sparse_adam`
 
-: Dùng `-OptimizerType default`. Chạy sẽ chậm hơn nhưng ít phụ thuộc accelerated
-rasterizer hơn.
+: Chạy lại với `-OptimizerType default`.
 
 Hết VRAM
 
-: Dùng `-Preset local-r2-7k`, hoặc override `-Resolution 2`, giảm iterations,
-train từng scene bằng `train_3dgs_scene.ps1`, hoặc tắt antialiasing.
+: Dùng `local-r2-7k`, hoặc override `-Resolution 2`, giảm iterations, tắt antialiasing, hoặc train từng scene.
 
 Render thiếu file hoặc sai kích thước
 
-: Luôn chạy `validate_submission.ps1`. Script sẽ báo scene/file nào thiếu hoặc
-ảnh nào sai size so với `test/test_poses.csv`.
+: Luôn chạy `validate_submission.ps1` sau render.
 
 Metric public không có LPIPS
 
 : Cài `requirements-lpips.txt` và chạy `evaluate_public.ps1 -Lpips on`.
 
-## 13. Baseline phụ
+## 14. Baseline phụ
 
-Repo vẫn có baseline để kiểm tra format khi 3DGS toolchain chưa build được:
+Khi 3DGS chưa build xong, có thể chạy baseline để kiểm tra format và metric:
 
-```powershell
-.\scripts\run_nearest_baseline.ps1 -DataRoot phase1\public_set -OutDir outputs\nearest_public
-.\scripts\run_point_splat_baseline.ps1 -DataRoot phase1\public_set -OutDir outputs\point_splat_public -ModelDir outputs\point_splat_models_public
+```bash
+pwsh -File ./scripts/run_nearest_baseline.ps1 \
+  -DataRoot phase1/public_set \
+  -OutDir outputs/nearest_public
+
+pwsh -File ./scripts/run_point_splat_baseline.ps1 \
+  -DataRoot phase1/public_set \
+  -OutDir outputs/point_splat_public \
+  -ModelDir outputs/point_splat_models_public
 ```
 
-Các baseline này không thay thế 3DGS, nhưng hữu ích để kiểm tra data, validation,
-packaging và metric trước khi chạy train GPU dài.
+Các baseline này không thay thế 3DGS, nhưng rất hữu ích để kiểm tra data, validation, packaging và flow đánh giá trước khi chạy train GPU dài.
